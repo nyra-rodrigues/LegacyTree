@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+transformers
+torch
+pydantic
+streamlit
+streamlit-folium
+folium
+streamlit-mic-recorder
+requests 
