@@ -122,13 +122,40 @@ if tab == "Record Story":
     # --- New: Visibility options ---
     visibility = st.radio("Who can see this story?", ["Private (Family Only)", "Public"], horizontal=True)
 
-    # --- New: AI Illustration Generator (Mock) ---
+    # --- New: AI Illustration Generator ---
     generate_illustration = st.checkbox("Generate an AI illustration for this story")
+    illustration_style = st.selectbox(
+        "Illustration Style",
+        ["realistic", "artistic", "vintage", "modern", "fantasy"],
+        help="Choose the style for your AI-generated illustration"
+    )
     illustration_url = None
+    
     if generate_illustration and transcript:
-        # Mock: Use a placeholder image URL
-        illustration_url = "https://placehold.co/400x200?text=AI+Illustration"
-        st.image(illustration_url, caption="AI-generated illustration (mock)")
+        with st.spinner("🎨 Generating AI illustration..."):
+            try:
+                # Call the backend to generate illustration
+                response = requests.post(
+                    "http://localhost:8000/api/generate-illustration",
+                    json={"text": transcript, "style": illustration_style},
+                    timeout=120  # Longer timeout for image generation
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    illustration_url = result["illustration_url"]
+                    st.success("✅ AI illustration generated!")
+                    st.image(illustration_url, caption=f"AI-generated illustration ({illustration_style} style)")
+                else:
+                    st.error(f"Failed to generate illustration: {response.text}")
+                    illustration_url = None
+                    
+            except requests.exceptions.ConnectionError:
+                st.error("Could not connect to backend for illustration generation")
+                illustration_url = None
+            except Exception as e:
+                st.error(f"Error generating illustration: {str(e)}")
+                illustration_url = None
 
     # --- Placeholder for AI Summarization ---
     if st.button("Summarize & Save Story"):
@@ -305,6 +332,26 @@ if tab == "Guided Story Chat":
 
     # Voice mode toggle
     voice_mode = st.checkbox("🎤 Voice Mode (Speak instead of type)", value=False)
+    
+    # Language selection for speech
+    if voice_mode:
+        try:
+            response = requests.get("http://localhost:8000/api/speech/languages", timeout=5)
+            if response.status_code == 200:
+                languages = response.json()
+                language_options = {v: k for k, v in languages.items()}
+                selected_language = st.selectbox(
+                    "Select Language",
+                    options=list(language_options.keys()),
+                    index=0
+                )
+                language_code = language_options[selected_language]
+            else:
+                language_code = "en"
+                st.warning("Could not load languages, using English")
+        except:
+            language_code = "en"
+            st.warning("Could not connect to speech service, using English")
 
     # Display chat history (skip system prompt)
     for i, msg in enumerate(st.session_state["chat_history"]):
@@ -312,26 +359,19 @@ if tab == "Guided Story Chat":
             st.markdown(f"**You:** {msg}")
         else:
             st.markdown(f"**AI:** {msg}")
-            # Add audio playback for AI responses
+            # Add TTS for AI responses
             if voice_mode:
-                # Simple TTS using browser's speech synthesis
-                st.markdown(f"""
-                <script>
-                function speak(text) {{
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.rate = 0.9;
-                    utterance.pitch = 1.0;
-                    speechSynthesis.speak(utterance);
-                }}
-                speak("{msg.replace('"', '\\"')}");
-                </script>
-                """, unsafe_allow_html=True)
-                if st.button(f"🔊 Play AI Response", key=f"play_{i}"):
-                    st.markdown(f"""
-                    <script>
-                    speak("{msg.replace('"', '\\"')}");
-                    </script>
-                    """, unsafe_allow_html=True)
+                try:
+                    tts_response = requests.post(
+                        "http://localhost:8000/api/text-to-speech",
+                        json={"text": msg, "language": language_code, "slow": False},
+                        timeout=30
+                    )
+                    if tts_response.status_code == 200:
+                        audio_url = tts_response.json()["audio_url"]
+                        st.audio(audio_url, format="audio/mp3")
+                except Exception as e:
+                    st.error(f"TTS error: {str(e)}")
 
     # Input method based on voice mode
     if voice_mode:
@@ -339,10 +379,30 @@ if tab == "Guided Story Chat":
         audio = mic_recorder(key="mic_recorder", use_container_width=True)
         
         if audio:
-            # For demo purposes, we'll use a placeholder for STT
-            # In production, you'd use a real STT service like Google Speech-to-Text
-            st.info("🎤 Voice detected! (STT processing would happen here)")
-            user_input = st.text_input("Or type your message here:", key="voice_fallback")
+            try:
+                # Convert audio to base64
+                import base64
+                audio_bytes = audio['bytes']
+                audio_base64 = base64.b64encode(audio_bytes).decode()
+                
+                # Send to backend for STT
+                stt_response = requests.post(
+                    "http://localhost:8000/api/speech-to-text",
+                    json={"audio_data": audio_base64, "language": language_code},
+                    timeout=30
+                )
+                
+                if stt_response.status_code == 200:
+                    transcribed_text = stt_response.json()["text"]
+                    st.success(f"🎤 Transcribed: {transcribed_text}")
+                    user_input = transcribed_text
+                else:
+                    st.error("Failed to transcribe speech")
+                    user_input = st.text_input("Or type your message here:", key="voice_fallback")
+                    
+            except Exception as e:
+                st.error(f"Speech recognition error: {str(e)}")
+                user_input = st.text_input("Or type your message here:", key="voice_fallback")
         else:
             user_input = st.text_input("Or type your message here:", key="voice_fallback")
     else:
@@ -375,19 +435,6 @@ if tab == "Guided Story Chat":
     if reset_clicked:
         st.session_state["chat_history"] = []
         st.rerun()
-
-    # Add JavaScript for TTS
-    if voice_mode:
-        st.markdown("""
-        <script>
-        function speak(text) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.9;
-            utterance.pitch = 1.0;
-            speechSynthesis.speak(utterance);
-        }
-        </script>
-        """, unsafe_allow_html=True)
 
 # --- Footer ---
 st.markdown("---")

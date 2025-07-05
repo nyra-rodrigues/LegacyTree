@@ -6,6 +6,7 @@ from transformers import BlenderbotTokenizer, BlenderbotForConditionalGeneration
 import torch
 from typing import List
 import os
+import base64
 
 # Import our modules
 from database import get_db, engine
@@ -13,6 +14,22 @@ from models import Base, Story
 from schemas import StoryCreate, StoryUpdate, Story as StorySchema, ConversationRequest
 from geocoding import GeocodingService
 from summarization import SummarizationService
+
+# Optional import for image generation
+try:
+    from image_generation import ImageGenerationService
+    IMAGE_GENERATION_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Image generation not available: {e}")
+    IMAGE_GENERATION_AVAILABLE = False
+
+# Optional import for speech services
+try:
+    from speech_service import SpeechService
+    SPEECH_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Speech services not available: {e}")
+    SPEECH_AVAILABLE = False
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -38,6 +55,20 @@ geocoding_service = GeocodingService()
 
 # Initialize summarization service
 summarization_service = SummarizationService(use_ai_model=True)  # Enable AI model
+
+# Initialize image generation service (lazy loading)
+if IMAGE_GENERATION_AVAILABLE:
+    image_generation_service = ImageGenerationService(use_gpu=False)  # Start with CPU for compatibility
+else:
+    image_generation_service = None
+
+# Initialize speech service (lazy loading)
+if SPEECH_AVAILABLE:
+    speech_service = SpeechService()
+    # Pre-load the Whisper model to avoid delays
+    speech_service.load_whisper_model()
+else:
+    speech_service = None
 
 def build_conversation_input(history: List[str]):
     # BlenderBot expects the conversation as a single string, with each turn separated by </s>
@@ -155,6 +186,35 @@ def process_story(request: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI processing error: {str(e)}")
 
+# AI Illustration Generation endpoint
+@app.post("/api/generate-illustration")
+def generate_illustration(request: dict):
+    """Generate an AI illustration based on story content"""
+    if not IMAGE_GENERATION_AVAILABLE or image_generation_service is None:
+        raise HTTPException(status_code=503, detail="Image generation service not available")
+    
+    story_text = request.get("text", "")
+    style = request.get("style", "realistic")
+    
+    if not story_text:
+        raise HTTPException(status_code=400, detail="Story text is required")
+    
+    try:
+        # Generate the illustration
+        illustration_data = image_generation_service.generate_story_illustration(story_text, style)
+        
+        if illustration_data:
+            return {
+                "success": True,
+                "illustration_url": illustration_data,
+                "style": style
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate illustration")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Illustration generation error: {str(e)}")
+
 # Existing conversation endpoint
 @app.post("/api/conversation")
 def converse(req: ConversationRequest):
@@ -168,4 +228,99 @@ def converse(req: ConversationRequest):
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to LegacyTree API", "version": "1.0.0"} 
+    return {"message": "Welcome to LegacyTree API", "version": "1.0.0"}
+
+@app.get("/api/health")
+def health_check():
+    """Check the health and availability of all services"""
+    return {
+        "status": "healthy",
+        "services": {
+            "speech": {
+                "available": SPEECH_AVAILABLE,
+                "initialized": speech_service is not None,
+                "model_loaded": speech_service.is_available() if speech_service else False
+            },
+            "image_generation": {
+                "available": IMAGE_GENERATION_AVAILABLE,
+                "initialized": image_generation_service is not None
+            },
+            "summarization": {
+                "available": True,
+                "model_loaded": summarization_service.summarizer is not None
+            },
+            "geocoding": {
+                "available": True
+            }
+        }
+    }
+
+# Speech-to-Text endpoint
+@app.post("/api/speech-to-text")
+def convert_speech_to_text(request: dict):
+    """Convert speech audio to text"""
+    if not SPEECH_AVAILABLE or speech_service is None:
+        raise HTTPException(status_code=503, detail="Speech service not available")
+    
+    audio_data = request.get("audio_data")
+    language = request.get("language", "en")
+    
+    if not audio_data:
+        raise HTTPException(status_code=400, detail="Audio data is required")
+    
+    try:
+        # Decode base64 audio data
+        audio_bytes = base64.b64decode(audio_data)
+        
+        # Convert speech to text
+        text = speech_service.speech_to_text(audio_bytes, language)
+        
+        if text:
+            return {"success": True, "text": text}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to transcribe speech")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Speech-to-text error: {str(e)}")
+
+# Text-to-Speech endpoint
+@app.post("/api/text-to-speech")
+def convert_text_to_speech(request: dict):
+    """Convert text to speech"""
+    if not SPEECH_AVAILABLE or speech_service is None:
+        raise HTTPException(status_code=503, detail="Speech service not available")
+    
+    text = request.get("text", "")
+    language = request.get("language", "en")
+    slow = request.get("slow", False)
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+    
+    try:
+        # Convert text to speech
+        audio_url = speech_service.text_to_speech(text, language, slow)
+        
+        if audio_url:
+            return {"success": True, "audio_url": audio_url}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate speech")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text-to-speech error: {str(e)}")
+
+# Get supported languages endpoint
+@app.get("/api/speech/languages")
+def get_supported_languages():
+    """Get list of supported languages for speech services"""
+    if not SPEECH_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Speech service not available - module not imported")
+    
+    if speech_service is None:
+        raise HTTPException(status_code=503, detail="Speech service not available - service not initialized")
+    
+    try:
+        languages = speech_service.get_supported_languages()
+        return languages
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting languages: {str(e)}") 

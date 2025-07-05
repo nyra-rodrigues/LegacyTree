@@ -12,4 +12,12 @@ sqlalchemy
 geopy
 python-multipart
 sentence-transformers
-certifi 
+certifi
+diffusers
+accelerate
+safetensors
+invisible_watermark
+Pillow
+openai-whisper
+gTTS
+pyttsx3 
