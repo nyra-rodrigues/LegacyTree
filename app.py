@@ -41,15 +41,36 @@ if 'stories' not in st.session_state:
 # --- Helper Functions ---
 def display_story_card(story):
     st.markdown(f"### {story['title']}")
-    st.markdown(f"**Theme:** `{story['theme']}` | **Date:** {story.get('date', 'Unknown')}")
+    
+    # Format date properly
+    date_str = story.get('date', 'Unknown')
+    if date_str and date_str != 'Unknown':
+        try:
+            # Handle both string dates and datetime objects
+            if isinstance(date_str, str):
+                if 'T' in date_str:
+                    # Parse ISO format date
+                    from datetime import datetime
+                    date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    formatted_date = date_obj.strftime('%Y-%m-%d')
+                else:
+                    formatted_date = date_str
+            else:
+                formatted_date = date_str
+        except:
+            formatted_date = date_str
+    else:
+        formatted_date = 'Unknown'
+    
+    st.markdown(f"**Theme:** `{story['theme']}` | **Date:** {formatted_date}")
     st.markdown(f"**Location:** {story['location']}")
     st.write(story['summary'])
     if story.get('message_to_future'):
         st.markdown(f"**Message to Future Generations:** _{story['message_to_future']}_")
     st.markdown(f"**Visibility:** {story.get('visibility', 'Public')}")
-    if story['audio']:
+    if story.get('audio'):
         st.audio(story['audio'], format='audio/wav')
-    if story['image']:
+    if story.get('image'):
         st.image(story['image'], caption="Artifact")
     if story.get('illustration_url'):
         st.image(story['illustration_url'], caption="AI Illustration")
@@ -89,7 +110,12 @@ if tab == "Record Story":
 
     # Location input
     location = st.text_input("Where did this story take place? (City, Country)")
-    date = st.date_input("Date of memory", value=datetime.today())
+    date = st.date_input(
+        "Date of memory", 
+        value=datetime(1950, 1, 1),
+        min_value=datetime(1900, 1, 1),
+        max_value=datetime.today()
+    )
 
     # --- New: Upload a message to future generations ---
     message_to_future = st.text_area("Message to future generations (optional)")
@@ -107,38 +133,87 @@ if tab == "Record Story":
 
     # --- Placeholder for AI Summarization ---
     if st.button("Summarize & Save Story"):
-        # Mock: Use transcript or placeholder
-        if transcript:
-            summary = f"(AI Summary) {transcript[:200]}..."
-            title = "A Special Memory"
-            theme = "family"
+        if not transcript and not audio_file:
+            st.error("Please provide either a transcript or upload an audio file.")
         else:
-            summary = "(AI Summary) This is a placeholder summary."
-            title = "A Special Memory"
-            theme = "family"
-        # Mock: Geocode location (use fixed coords for demo)
-        if location.lower().startswith("toronto"):
-            lat, lon = 43.6532, -79.3832
-        elif location.lower().startswith("mumbai"):
-            lat, lon = 19.0760, 72.8777
-        else:
-            lat, lon = 40.7128, -74.0060  # Default: New York
-        # Save story
-        st.session_state['stories'].append({
-            'title': title,
-            'summary': summary,
-            'theme': theme,
-            'location': location or "Unknown",
-            'lat': lat,
-            'lon': lon,
-            'audio': audio_file.read() if audio_file else None,
-            'image': image_file,
-            'date': str(date),
-            'message_to_future': message_to_future,
-            'visibility': visibility,
-            'illustration_url': illustration_url,
-        })
-        st.success("Story saved and summarized!")
+            with st.spinner("Processing your story..."):
+                try:
+                    # Use transcript or placeholder
+                    story_text = transcript if transcript else "Audio story uploaded"
+                    
+                    # Get AI processing from backend
+                    ai_response = requests.post(
+                        "http://localhost:8000/api/process-story",
+                        json={"text": story_text},
+                        timeout=60
+                    )
+                    
+                    if ai_response.status_code == 200:
+                        ai_data = ai_response.json()
+                        summary = ai_data["summary"]
+                        title = ai_data["title"]
+                        theme = ai_data["theme"]
+                        st.success("🤖 AI processing completed!")
+                    else:
+                        # Fallback to simple processing
+                        st.warning("AI processing failed, using simple processing")
+                        if len(story_text) > 200:
+                            summary = f"{story_text[:200]}..."
+                        else:
+                            summary = story_text
+                        title = "A Special Memory"
+                        theme = "family"
+                    
+                    # Prepare story data
+                    story_data = {
+                        "title": title,
+                        "summary": summary,
+                        "theme": theme,
+                        "location": location or "Unknown",
+                        "lat": 43.6532,  # Will be updated by backend geocoding
+                        "lon": -79.3832,  # Will be updated by backend geocoding
+                        "date": str(date),
+                        "message_to_future": message_to_future,
+                        "visibility": visibility,
+                        "illustration_url": illustration_url
+                    }
+                    
+                    # Save to backend API
+                    response = requests.post(
+                        "http://localhost:8000/api/stories",
+                        json=story_data,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        saved_story = response.json()
+                        st.success(f"Story saved successfully! ID: {saved_story['id']}")
+                        
+                        # Add to session state for immediate display
+                        st.session_state['stories'].append({
+                            'title': saved_story['title'],
+                            'summary': saved_story['summary'],
+                            'theme': saved_story['theme'],
+                            'location': saved_story['location'],
+                            'lat': saved_story['lat'],
+                            'lon': saved_story['lon'],
+                            'audio': audio_file.read() if audio_file else None,
+                            'image': image_file,
+                            'date': saved_story['date'],
+                            'message_to_future': saved_story.get('message_to_future'),
+                            'visibility': saved_story.get('visibility', 'Public'),
+                            'illustration_url': saved_story.get('illustration_url'),
+                        })
+                        
+                        # Clear the form
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to save story: {response.text}")
+                        
+                except requests.exceptions.ConnectionError:
+                    st.error("Could not connect to backend API. Please make sure the backend is running on http://localhost:8000")
+                except Exception as e:
+                    st.error(f"Error saving story: {str(e)}")
 
     st.markdown("---")
     st.markdown("#### Your Stories")
@@ -149,6 +224,19 @@ if tab == "Record Story":
 elif tab == "Memory Map":
     st.header("🌍 Memory Map")
     st.markdown("Explore stories pinned to places. Click a pin to view the memory.")
+    
+    # Load stories from backend
+    try:
+        response = requests.get("http://localhost:8000/api/stories", timeout=10)
+        if response.status_code == 200:
+            backend_stories = response.json()
+            # Update session state with backend data
+            st.session_state['stories'] = backend_stories
+        else:
+            st.warning("Could not load stories from backend, using local data.")
+    except:
+        st.warning("Could not connect to backend, using local data.")
+    
     # Center map on first story or default
     if st.session_state['stories']:
         center = [st.session_state['stories'][0]['lat'], st.session_state['stories'][0]['lon']]

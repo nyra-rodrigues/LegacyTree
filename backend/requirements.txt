@@ -7,4 +7,8 @@ streamlit
 streamlit-folium
 folium
 streamlit-mic-recorder
-requests 
+requests
+sqlalchemy
+geopy
+python-multipart
+sentence-transformers 
