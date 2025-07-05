@@ -86,11 +86,10 @@ st.markdown(
 # --- Sidebar Navigation ---
 tab = st.sidebar.radio(
     "Navigate",
-    ["Record Story", "Memory Map", "Posthumous Chat", "Guided Story Chat"],
+    ["Record Story", "Memory Map", "Guided Story Chat"],
     format_func=lambda x: {
         "Record Story": "🎙️ Record Story",
         "Memory Map": "🌍 Memory Map",
-        "Posthumous Chat": "💬 Posthumous Chat",
         "Guided Story Chat": "🤖 Guided Story Chat"
     }[x]
 )
@@ -232,53 +231,65 @@ elif tab == "Memory Map":
             backend_stories = response.json()
             # Update session state with backend data
             st.session_state['stories'] = backend_stories
+            st.success(f"✅ Loaded {len(backend_stories)} stories from backend")
         else:
             st.warning("Could not load stories from backend, using local data.")
-    except:
-        st.warning("Could not connect to backend, using local data.")
+    except Exception as e:
+        st.warning(f"Could not connect to backend: {str(e)}")
+        st.info("Using local session data instead.")
     
-    # Center map on first story or default
-    if st.session_state['stories']:
-        center = [st.session_state['stories'][0]['lat'], st.session_state['stories'][0]['lon']]
+    # Debug: Show story count
+    story_count = len(st.session_state['stories'])
+    st.info(f"📊 Total stories available: {story_count}")
+    
+    if story_count == 0:
+        st.warning("No stories found. Create some stories in the 'Record Story' tab first!")
     else:
-        center = [20, 0]
-    m = folium.Map(location=center, zoom_start=2)
-    for idx, story in enumerate(st.session_state['stories']):
-        popup_html = f"""
-        <b>{story['title']}</b><br>
-        <i>{story['theme']}</i><br>
-        {story['summary'][:100]}...<br>
-        <i>{story['location']}</i><br>
-        <i>{story.get('date', '')}</i>
-        """
-        folium.Marker(
-            [story['lat'], story['lon']],
-            popup=popup_html,
-            tooltip=story['title'],
-            icon=folium.Icon(color='green', icon='book')
-        ).add_to(m)
-    st_folium(m, width=700, height=500)
+        # Center map on first story or default
+        if st.session_state['stories']:
+            first_story = st.session_state['stories'][0]
+            center = [first_story['lat'], first_story['lon']]
+            st.info(f"📍 Centering map on: {first_story['location']} ({first_story['lat']}, {first_story['lon']})")
+        else:
+            center = [20, 0]
+            st.info("📍 No stories found, using default center")
+        
+        # Create the map
+        m = folium.Map(location=center, zoom_start=2)
+        
+        # Add markers for each story
+        for idx, story in enumerate(st.session_state['stories']):
+            try:
+                # Create popup content
+                popup_html = f"""
+                <div style="width: 300px;">
+                    <h4><b>{story['title']}</b></h4>
+                    <p><i>Theme: {story['theme']}</i></p>
+                    <p>{story['summary'][:150]}...</p>
+                    <p><i>📍 {story['location']}</i></p>
+                    <p><i>📅 {story.get('date', 'Unknown')}</i></p>
+                </div>
+                """
+                
+                # Add marker to map
+                folium.Marker(
+                    [story['lat'], story['lon']],
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=story['title'],
+                    icon=folium.Icon(color='green', icon='book')
+                ).add_to(m)
+                
+            except Exception as e:
+                st.error(f"Error adding story {idx} to map: {str(e)}")
+                st.write(f"Story data: {story}")
+        
+        # Display the map
+        st_folium(m, width=700, height=500)
+    
     st.markdown("---")
     st.markdown("#### All Stories")
     for story in reversed(st.session_state['stories']):
         display_story_card(story)
-
-# --- Posthumous Chat Tab ---
-elif tab == "Posthumous Chat":
-    st.header("💬 Posthumous AI Chat")
-    st.markdown(
-        "Ask your loved one a question. The AI will answer in their voice, using their values and memories. (Demo mode)"
-    )
-    question = st.text_input("What would you like to ask?")
-    if st.button("Ask AI") and question:
-        # Mock AI response
-        st.markdown(
-            f"**Lila Rodrigues:** My dear, that's a wonderful question. Remember, forgiveness and kindness are the roots of our family. When I faced challenges, I always turned to faith and hard work. {question} is something I would have approached with love and patience."
-        )
-    st.markdown("---")
-    st.markdown(
-        "> _This feature uses AI to answer in the tone and spirit of your loved one, drawing on their stories and values._"
-    )
 
 # --- Guided Story Chat Tab ---
 if tab == "Guided Story Chat":

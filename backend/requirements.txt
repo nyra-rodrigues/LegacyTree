@@ -11,4 +11,5 @@ requests
 sqlalchemy
 geopy
 python-multipart
-sentence-transformers 
+sentence-transformers
+certifi 
