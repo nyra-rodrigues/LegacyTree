@@ -24,6 +24,8 @@ except ImportError as e:
     IMAGE_GENERATION_AVAILABLE = False
 
 # Optional import for speech services
+
+
 try:
     from speech_service import SpeechService
     SPEECH_AVAILABLE = True

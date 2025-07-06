@@ -5,9 +5,51 @@ from datetime import datetime
 import requests
 from streamlit_mic_recorder import mic_recorder
 import streamlit.components.v1 as components
+import base64
 
 # --- Branding & Config ---
-st.set_page_config(page_title="LegacyTree", layout="wide", page_icon="🌳")
+st.set_page_config(page_title="LegacyTree", layout="wide", page_icon="🌲")
+
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+bg_image = 'background.jpg'  # Update path if needed
+bg_ext = 'jpg'       # or 'jpeg', 'png', etc.
+
+bg_base64 = get_base64_of_bin_file(bg_image)
+
+st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        position: relative;
+        min-height: 100vh;
+        background-image: url('data:image/{bg_ext};base64,{bg_base64}');
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+    }}
+    .stApp::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.6); /* Adjust the 0.5 for more/less fade */
+        z-index: 0;
+        pointer-events: none;
+    }}
+    .stApp > * {{
+        position: relative;
+        z-index: 1;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Demo Data Store (in-memory for MVP) ---
 # This checks if the 'stories' key is not present in Streamlit's session state.
@@ -77,13 +119,61 @@ def display_story_card(story):
     st.markdown("---")
 
 # --- Header ---
-st.title("🌳 LegacyTree")
+st.title("🌲 LegacyTree")
 st.subheader("Where memories become roots.")
-st.markdown(
-    "> _Preserve your family's stories, mapped and organized by AI.\n> \n> **LegacyTree** helps elders record, organize, and share their life stories—pinning memories to places, and letting future generations ask questions and relive the past. _"
-)
+st.markdown("""
+LegacyTree is your family's personal time capsule — a platform that helps elders and loved ones record their life stories, map them to the places they happened, and preserve them forever.
+
+Using AI, we turn conversations into beautifully summarized chapters, illustrated memories, and interactive maps that can be shared across generations. Whether it's a story of migration, love, resilience, or tradition — LegacyTree ensures it's never forgotten.
+""")
 
 # --- Sidebar Navigation ---
+
+# Custom CSS for sidebar and radio buttons
+st.markdown(
+    """
+    <style>
+    /* Sidebar background and padding */
+    section[data-testid="stSidebar"] {
+        background: rgba(30, 30, 30, 0.85);
+        border-radius: 18px;
+        margin: 16px 8px 16px 0;
+        padding: 24px 12px 24px 12px;
+        box-shadow: 0 4px 24px 0 rgba(0,0,0,0.25);
+    }
+    /* Sidebar header/logo */
+    [data-testid="stSidebar"] img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    /* Radio label styling */
+    div[data-baseweb="radio"] label {
+        font-size: 1.1em;
+        color: #fff;
+        background: rgba(34,139,34,0.15);
+        border-radius: 10px;
+        padding: 8px 16px;
+        margin-bottom: 8px;
+        transition: background 0.2s, color 0.2s;
+    }
+    /* Selected radio option */
+    div[data-baseweb="radio"] label[data-selected="true"] {
+        background: linear-gradient(90deg, #228B22 60%, #6B8E23 100%);
+        color: #fff;
+        font-weight: bold;
+        box-shadow: 0 2px 8px 0 rgba(34,139,34,0.15);
+    }
+    /* Radio hover effect */
+    div[data-baseweb="radio"] label:hover {
+        background: rgba(34,139,34,0.35);
+        color: #fff;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 tab = st.sidebar.radio(
     "Navigate",
     ["Record Story", "Memory Map", "Guided Story Chat"],
@@ -124,20 +214,15 @@ if tab == "Record Story":
 
     # --- New: AI Illustration Generator ---
     generate_illustration = st.checkbox("Generate an AI illustration for this story")
-    illustration_style = st.selectbox(
-        "Illustration Style",
-        ["realistic", "artistic", "vintage", "modern", "fantasy"],
-        help="Choose the style for your AI-generated illustration"
-    )
     illustration_url = None
-    
+
     if generate_illustration and transcript:
         with st.spinner("🎨 Generating AI illustration..."):
             try:
                 # Call the backend to generate illustration
                 response = requests.post(
                     "http://localhost:8000/api/generate-illustration",
-                    json={"text": transcript, "style": illustration_style},
+                    json={"text": transcript},  # No style sent
                     timeout=120  # Longer timeout for image generation
                 )
                 
@@ -145,7 +230,7 @@ if tab == "Record Story":
                     result = response.json()
                     illustration_url = result["illustration_url"]
                     st.success("✅ AI illustration generated!")
-                    st.image(illustration_url, caption=f"AI-generated illustration ({illustration_style} style)")
+                    st.image(illustration_url, caption=f"AI-generated illustration")
                 else:
                     st.error(f"Failed to generate illustration: {response.text}")
                     illustration_url = None
@@ -381,7 +466,6 @@ if tab == "Guided Story Chat":
         if audio:
             try:
                 # Convert audio to base64
-                import base64
                 audio_bytes = audio['bytes']
                 audio_base64 = base64.b64encode(audio_bytes).decode()
                 
@@ -439,5 +523,5 @@ if tab == "Guided Story Chat":
 # --- Footer ---
 st.markdown("---")
 st.markdown(
-    "<center>Made with ❤️ for Hack404. LegacyTree: Where memories become roots.</center>", unsafe_allow_html=True
+    "<center>LegacyTree - Where memories become roots.</center>", unsafe_allow_html=True
 ) 
