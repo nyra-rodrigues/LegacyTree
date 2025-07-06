@@ -343,60 +343,57 @@ elif tab == "Memory Map":
             backend_stories = response.json()
             # Update session state with backend data
             st.session_state['stories'] = backend_stories
-            st.success(f"✅ Loaded {len(backend_stories)} stories from backend")
-        else:
-            st.warning("Could not load stories from backend, using local data.")
+        # else:
+        #     st.warning("Could not load stories from backend, using local data.")  # Optionally remove
     except Exception as e:
-        st.warning(f"Could not connect to backend: {str(e)}")
-        st.info("Using local session data instead.")
+        pass  # Optionally keep info message
     
     # Debug: Show story count
-    story_count = len(st.session_state['stories'])
-    st.info(f"📊 Total stories available: {story_count}")
+    # story_count = len(st.session_state['stories'])
+    # st.info(f"📊 Total stories available: {story_count}")  # Removed
     
-    if story_count == 0:
-        st.warning("No stories found. Create some stories in the 'Record Story' tab first!")
+    # if story_count == 0:
+    #     st.warning("No stories found. Create some stories in the 'Record Story' tab first!")  # Removed
+    # else:
+    if st.session_state['stories']:
+        first_story = st.session_state['stories'][0]
+        center = [first_story['lat'], first_story['lon']]
+        st.info(f"📍 Centering map on: {first_story['location']} ({first_story['lat']}, {first_story['lon']})")
     else:
-        # Center map on first story or default
-        if st.session_state['stories']:
-            first_story = st.session_state['stories'][0]
-            center = [first_story['lat'], first_story['lon']]
-            st.info(f"📍 Centering map on: {first_story['location']} ({first_story['lat']}, {first_story['lon']})")
-        else:
-            center = [20, 0]
-            st.info("📍 No stories found, using default center")
-        
-        # Create the map
-        m = folium.Map(location=center, zoom_start=2)
-        
-        # Add markers for each story
-        for idx, story in enumerate(st.session_state['stories']):
-            try:
-                # Create popup content
-                popup_html = f"""
-                <div style="width: 300px;">
-                    <h4><b>{story['title']}</b></h4>
-                    <p><i>Theme: {story['theme']}</i></p>
-                    <p>{story['summary'][:150]}...</p>
-                    <p><i>📍 {story['location']}</i></p>
-                    <p><i>📅 {story.get('date', 'Unknown')}</i></p>
-                </div>
-                """
-                
-                # Add marker to map
-                folium.Marker(
-                    [story['lat'], story['lon']],
-                    popup=folium.Popup(popup_html, max_width=300),
-                    tooltip=story['title'],
-                    icon=folium.Icon(color='green', icon='book')
-                ).add_to(m)
-                
-            except Exception as e:
-                st.error(f"Error adding story {idx} to map: {str(e)}")
-                st.write(f"Story data: {story}")
-        
-        # Display the map
-        st_folium(m, width=700, height=500)
+        center = [20, 0]
+        st.info("📍 No stories found, using default center")
+    
+    # Create the map
+    m = folium.Map(location=center, zoom_start=2)
+    
+    # Add markers for each story
+    for idx, story in enumerate(st.session_state['stories']):
+        try:
+            # Create popup content
+            popup_html = f"""
+            <div style="width: 300px;">
+                <h4><b>{story['title']}</b></h4>
+                <p><i>Theme: {story['theme']}</i></p>
+                <p>{story['summary'][:150]}...</p>
+                <p><i>📍 {story['location']}</i></p>
+                <p><i>📅 {story.get('date', 'Unknown')}</i></p>
+            </div>
+            """
+            
+            # Add marker to map
+            folium.Marker(
+                [story['lat'], story['lon']],
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=story['title'],
+                icon=folium.Icon(color='green', icon='book')
+            ).add_to(m)
+            
+        except Exception as e:
+            st.error(f"Error adding story {idx} to map: {str(e)}")
+            st.write(f"Story data: {story}")
+    
+    # Display the map
+    st_folium(m, width=700, height=500)
     
     st.markdown("---")
     st.markdown("#### All Stories")
@@ -409,7 +406,12 @@ if tab == "Guided Story Chat":
     st.markdown("Chat with the AI to help you record your story. The AI will guide you with questions and suggestions.")
 
     # System prompt (not shown in UI)
-    SYSTEM_PROMPT = "You are a helpful AI that interviews people to record their life stories. Ask thoughtful, open-ended questions to help them share their memories."
+    SYSTEM_PROMPT = (
+        "You are a warm, curious, and thoughtful interviewer. "
+        "Your goal is to help people record their life stories by asking open-ended, engaging questions. "
+        "Encourage them to share memories about their childhood, family, important events, places, traditions, challenges, and lessons learned. "
+        "Always ask follow-up questions to help them go deeper, and make them feel comfortable and valued as they share their experiences."
+    )
 
     # Initialize chat history in session state (only real user/AI turns)
     if "chat_history" not in st.session_state:
