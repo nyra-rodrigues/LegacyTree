@@ -17,8 +17,8 @@ class ImageGenerationService:
         try:
             print("🔄 Loading Stable Diffusion XL model...")
             
-            # Use CPU offloading if GPU memory is limited
             if self.use_gpu:
+                
                 self.pipeline = DiffusionPipeline.from_pretrained(
                     "stabilityai/stable-diffusion-xl-base-1.0",
                     torch_dtype=torch.float16,
@@ -26,7 +26,7 @@ class ImageGenerationService:
                     variant="fp16"
                 )
                 self.pipeline.to("cuda")
-                # Enable memory efficient attention if using torch < 2.0
+
                 if torch.__version__ < "2.0":
                     self.pipeline.enable_xformers_memory_efficient_attention()
             else:

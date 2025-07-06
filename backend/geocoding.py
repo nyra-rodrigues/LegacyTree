@@ -6,7 +6,7 @@ import certifi
 
 class GeocodingService:
     def __init__(self):
-        # Create SSL context with proper certificate verification
+
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         
         self.geolocator = Nominatim(
@@ -21,7 +21,7 @@ class GeocodingService:
         Returns default coordinates (Toronto) if geocoding fails
         """
         try:
-            # Add a small delay to be respectful to the geocoding service
+            
             time.sleep(1)
             
             location_data = self.geolocator.geocode(location)

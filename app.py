@@ -51,7 +51,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Demo Data Store (in-memory for MVP) ---
+# --- Demo Data ---
 # This checks if the 'stories' key is not present in Streamlit's session state.
 # If it's missing, it initializes 'stories' with a default list of story dictionaries.
 if 'stories' not in st.session_state:
@@ -84,7 +84,7 @@ if 'stories' not in st.session_state:
 def display_story_card(story):
     st.markdown(f"### {story['title']}")
     
-    # Format date properly
+    # Format date
     date_str = story.get('date', 'Unknown')
     if date_str and date_str != 'Unknown':
         try:
@@ -191,10 +191,10 @@ if tab == "Record Story":
 
     # Audio upload
     audio_file = st.file_uploader("Upload an audio file (WAV/MP3)", type=["wav", "mp3"])
-    # (Optional) Image upload
+    # Image upload
     image_file = st.file_uploader("Upload a photo or artifact (optional)", type=["jpg", "jpeg", "png"])
 
-    # (Optional) Manual transcript
+    # Manual transcript
     transcript = st.text_area("Or paste your story transcript here:")
 
     # Location input
@@ -206,13 +206,13 @@ if tab == "Record Story":
         max_value=datetime.today()
     )
 
-    # --- New: Upload a message to future generations ---
+    # Upload a message to future generations ---
     message_to_future = st.text_area("Message to future generations (optional)")
 
-    # --- New: Visibility options ---
+    # --- Visibility options ---
     visibility = st.radio("Who can see this story?", ["Private (Family Only)", "Public"], horizontal=True)
 
-    # --- New: AI Illustration Generator ---
+    # --- AI Illustration Generator ---
     generate_illustration = st.checkbox("Generate an AI illustration for this story")
     illustration_url = None
 
@@ -242,7 +242,7 @@ if tab == "Record Story":
                 st.error(f"Error generating illustration: {str(e)}")
                 illustration_url = None
 
-    # --- Placeholder for AI Summarization ---
+    # ---  AI Summarization ---
     if st.button("Summarize & Save Story"):
         if not transcript and not audio_file:
             st.error("Please provide either a transcript or upload an audio file.")
@@ -344,17 +344,11 @@ elif tab == "Memory Map":
             # Update session state with backend data
             st.session_state['stories'] = backend_stories
         # else:
-        #     st.warning("Could not load stories from backend, using local data.")  # Optionally remove
+        #     st.warning("Could not load stories from backend, using local data.")
     except Exception as e:
-        pass  # Optionally keep info message
+        pass 
     
-    # Debug: Show story count
-    # story_count = len(st.session_state['stories'])
-    # st.info(f"📊 Total stories available: {story_count}")  # Removed
-    
-    # if story_count == 0:
-    #     st.warning("No stories found. Create some stories in the 'Record Story' tab first!")  # Removed
-    # else:
+
     if st.session_state['stories']:
         first_story = st.session_state['stories'][0]
         center = [first_story['lat'], first_story['lon']]
@@ -413,7 +407,7 @@ if tab == "Guided Story Chat":
         "Always ask follow-up questions to help them go deeper, and make them feel comfortable and valued as they share their experiences."
     )
 
-    # Initialize chat history in session state (only real user/AI turns)
+    # Initialize chat history in session state
     if "chat_history" not in st.session_state:
         st.session_state["chat_history"] = []
 
@@ -440,7 +434,7 @@ if tab == "Guided Story Chat":
             language_code = "en"
             st.warning("Could not connect to speech service, using English")
 
-    # Display chat history (skip system prompt)
+    # Display chat history
     for i, msg in enumerate(st.session_state["chat_history"]):
         if i % 2 == 0:
             st.markdown(f"**You:** {msg}")

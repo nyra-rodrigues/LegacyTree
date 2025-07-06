@@ -3,7 +3,6 @@ import torch
 
 class SummarizationService:
     def __init__(self, use_ai_model=True):
-        # Use a much smaller, faster model for summarization
         self.model_name = "sshleifer/distilbart-cnn-12-6"
         self.use_ai_model = use_ai_model
         

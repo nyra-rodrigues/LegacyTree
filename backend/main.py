@@ -15,7 +15,7 @@ from schemas import StoryCreate, StoryUpdate, Story as StorySchema, Conversation
 from geocoding import GeocodingService
 from summarization import SummarizationService
 
-# Optional import for image generation
+# import for image generation
 try:
     from image_generation import ImageGenerationService
     IMAGE_GENERATION_AVAILABLE = True
@@ -23,7 +23,7 @@ except ImportError as e:
     print(f"⚠️ Image generation not available: {e}")
     IMAGE_GENERATION_AVAILABLE = False
 
-# Optional import for speech services
+# import for speech services
 
 
 try:
@@ -41,7 +41,7 @@ app = FastAPI(title="LegacyTree API", description="API for family story preserva
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=["*"],  # In production, specify frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
